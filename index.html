@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>金融模擬器 V11.0 - Clean Safe FAB版 (Mobile First)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; background: #121212; padding: 20px; color: #e0e0e0; margin: 0; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        .card { background: #1e1e1e; padding: 15px; border-radius: 8px; border-top: 3px solid #3498db; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .player-card { background: #1a2e25; padding: 20px; border-radius: 8px; border-top: 3px solid #27ae60; margin-bottom: 20px; }
+        .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+@media (max-width: 768px) { .dashboard { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .dashboard { grid-template-columns: 1fr; } }
+        .value { font-size: 1.15em; font-weight: bold; color: #3498db; display: block; margin-top: 5px; }
+        .sub-value { font-size: 0.85em; color: #f1c40f; }
+        .danger { color: #ff4757 !important; }
+        .income { color: #2ecc71 !important; }
+        .chart-container { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; height: 350px; position: relative; }
+        .action-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+        button { padding: 10px 14px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; background: #3498db; color: white; transition: 0.2s; font-size: 0.9em; }
+        button:hover { filter: brightness(1.2); }
+        button:disabled { background: #444 !important; cursor: not-allowed; opacity: 0.5; }
+        .log { background: #000; color: #00ff00; padding: 15px; height: 350px; overflow-y: auto; border-radius: 5px; font-family: 'Consolas', monospace; font-size: 0.85em; border: 1px solid #333; }
+        .statement-table { width: 100%; font-size: 0.85em; border-collapse: collapse; margin-top: 10px; }
+        .statement-table td { padding: 4px 0; border-bottom: 1px solid #333; }
+        .overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:100; flex-direction:column; justify-content:center; align-items:center; }
+        .report-box { background: #1e1e1e; padding: 30px; border-radius: 15px; border: 2px solid #2ecc71; max-width: 500px; width: 90%; text-align: center; }
+        #pause-indicator { position: absolute; top: 10px; right: 20px; color: #ff4757; font-weight: bold; display: none; }
+        .fab-start { border-radius: 50%; border: none; color: white; cursor: pointer; box-shadow: 0 8px 25px rgba(46,204,113,0.5); transition: transform 0.3s, box-shadow 0.3s; font-size: 2.5em; width: 120px; height: 120px; background: linear-gradient(45deg, #2ecc71, #27ae60); margin: 20px auto; display: block; }
+        .fab-start:hover, .fab-start:active { transform: scale(1.05); box-shadow: 0 12px 35px rgba(46,204,113,0.7); }
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
+          body { padding: 10px; }
+          .grid-layout { grid-template-columns: 1fr !important; gap: 15px; }
+          .dashboard { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; font-size: 0.9em; }
+          .chart-container { height: 250px !important; padding: 10px; }
+          .action-btns { flex-direction: column; gap: 10px; }
+          button { padding: 12px 16px !important; font-size: 1em; width: 100%; box-sizing: border-box; min-height: 48px; }
+          .player-card, .card { padding: 12px; }
+          .log { height: 200px; font-size: 0.8em; }
+          h2, h3 { font-size: 1.3em; }
+          .statement-table { font-size: 0.8em; }
+          .value { font-size: 1.1em !important; }
+          .fab-start { width: 100px; height: 100px; font-size: 2em; }
+        }
+        @media (max-width: 480px) {
+          .dashboard { grid-template-columns: 1fr !important; }
+          body { padding: 5px; }
+          #btn-pause {
+            position: fixed !important;
+            bottom: 20px !important;
+            right: 20px !important;
+            z-index: 1001 !important;
+            width: 60px !important;
+            height: 60px !important;
+            border-radius: 50% !important;
+            font-size: 1.5em !important;
+            padding: 0 !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            background: #f1c40f !important;
+            color: #000 !important;
+          }
+        }
+        #marketChart { max-height: 100%; height: 350px; }
+        @media (max-width: 768px) { #marketChart { height: 250px; } }
+        @media (max-width: 480px) { #marketChart { height: 200px; } }
+    </style>
+</head>
+<body>
+
+<div id="endScreen" class="overlay">
+    <div class="report-box">
+        <h1 style="color:#f1c40f; margin-bottom:10px;">🏆 人生結算報告</h1>
+        <div id="finalStats" style="text-align:left; font-size:1.1em; color:white; line-height:2; margin-bottom:20px; border-bottom:1px solid #444; padding-bottom:15px;"></div>
+        <div id="rankingResult" style="font-size:1.5em; font-weight:bold; color:#2ecc71; margin-bottom:20px;"></div>
+        <button onclick="location.reload()" style="background:#2ecc71; padding:15px 40px; font-size:1.1em;">重啟人生</button>
+    </div>
+</div>
+
+<div class="container">
+    <h2 style="color:#fff;">🏦 金融模擬器 V11.0 - Clean Safe FAB版</h2>
+    <div class="grid-layout">
+        <div class="main-column">
+            <div class="chart-container">
+                <div id="pause-indicator">⏸️ 時間已暫停</div>
+                <canvas id="marketChart"></canvas>
+            </div>
+            <div class="dashboard">
+                <div class="card">年齡 / 日期<br><span class="value" id="ui-age">--</span><span id="ui-date" class="sub-value">--</span></div>
+                <div class="card">恆生指數 (HSI)<br><span class="value" id="ui-hsi" style="color:#f1c40f">--</span><span class="sub-value"><span id="ui-market-mood">--</span> | 利率: <span id="ui-interest">--</span></span></div>
+                <div class="card">社會地位<br><span class="value" id="ui-status">--</span><span class="sub-value"><span id="ui-rank">--</span> | 月薪: <span id="ui-salary">--</span></span></div>
+                <div class="card">樓市呎價<br><span class="value" id="ui-property-entry" style="color:#3498db">--</span><span class="sub-value" id="ui-pir">--</span></span></div>
+                <div class="card">總負債<br><span class="value danger" id="p-debt-val">--</span><span class="sub-value">信用額度: <span id="ui-credit-limit">--</span></span></div>
+                <div class="card">可用現金<br><span class="value" id="p-cash-top" style="color:#fff">--</span></div>
+            </div> 
+            <div class="player-card">
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:20px;">
+                    <div>股票市值: <span id="p-stock-val" style="color:#f1c40f">$0</span></div>
+                    <div>物業市值: <span id="p-house-val" style="color:#3498db">$0</span> (<span id="p-house-count">0</span>間)</div>
+                    <div>淨資產: <span id="p-net-worth" style="color:#2ecc71">$0</span></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:20px;">
+                    <div style="background:#1a2e25; padding:12px; border-radius:6px; text-align:center;">薪金: <span class="value income" id="ui-total-salary">$0M</span></div>
+                    <div style="background:#1a2e25; padding:12px; border-radius:6px; text-align:center;">收息: <span class="value income" id="ui-total-divs">$0M</span></div>
+                    <div style="background:#1a2e25; padding:12px; border-radius:6px; text-align:center;">收租: <span class="value income" id="ui-total-rent">$0M</span></div>
+                </div>
+                <div id="start-fab">
+                    <button onclick="startGame()" class="fab-start">🚀</button>
+                    <p style="color:#aaa; font-size:0.9em; margin-top:10px;">點擊開始你的投資人生</p>
+                </div>
+                <div class="action-btns" id="action-btns">
+                    <button style="background:#2ecc71" onclick="buyStockPct(1.0)">ALL-IN 股票</button>
+                    <button style="background:#27ae60" onclick="buyStockPct(0.2)">1/5 買入</button>
+                    <button style="background:#d35400" onclick="sellStockPct(1.0)">沽清股票</button>
+                    <button style="background:#e67e22" onclick="sellStockPct(0.2)">1/5 沽出</button>
+                    <button id="btn-buy-house" style="background:#3498db" onclick="buyHouse()">買入一間單位</button>
+                    <button style="background:#c0392b" onclick="sellHouse()">賣出一間單位</button>
+                    <button id="btn-borrow" style="background:#8e44ad" onclick="borrowMoney()">融資借款</button>
+                    <button id="btn-repay" style="background:#9b59b6" onclick="repayDebt()">主動還款</button>
+                    <button id="btn-pause" style="background:#f1c40f; color:#000" onclick="togglePause()">⏸️ 暫停</button>
+                    <button style="background:#e74c3c; border: 2px solid #fff;" onclick="endGame()">🏁 即時結算</button>
+                </div>
+            </div>
+        </div>
+        <div class="side-column">
+            <div class="card" style="margin-bottom:15px; border-top: 3px solid #f1c40f; background: #2c2c2c;">
+                <h3 style="margin:0 0 10px 0; font-size:1em; color:#f1c40f;">🐑 AI 羊仔嘅資產狀況</h3>
+                <div style="font-size: 0.85em; line-height: 1.8;">
+                    <div>淨資產: <span id="ai-net-worth" style="color:#2ecc71">--</span></div>
+                    <div>現金: <span id="ai-cash" style="color:#fff">--</span></div>
+                    <div>月薪: $<span id="ai-salary-val">--</span> | 盈餘: <span id="ai-surplus" style="color:#2ecc71">--</span></div>
+                    <div>股票: <span id="ai-stock-val">--</span> | 樓: <span id="ai-house-count">0</span> 間</div>
+                    <div>狀態: <span id="ai-status">--</span></div>
+                </div>
+            </div>
+            <div class="card" style="margin-bottom:15px; border-top: 3px solid #2ecc71;">
+                <h3 style="margin:0 0 10px 0; font-size:1em; color:#2ecc71;">📊 本月詳細收支</h3>
+                <table class="statement-table" id="ui-statement-table"></table>
+            </div>
+            <div class="card">
+                <h3>📢 市場與生活日誌</h3>
+                <div class="log" id="gameLog"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// safeLog
+function safeLog(...args) {
+  try { console.log(...args); } catch (e) {}
+}
+
+// state
+let state = {
+  year: 2026, month: 1, age: 20, totalMonths: 0, running: true, isPaused: false,
+  hsi: 21000, propertyPrice: 10500, bufferedPropPrice: 10500, interestRate: 4.0,
+  marketWage: 20000, salary: 20000, baseSalary: 20000, livingCost: 10000,
+  preRetireLiving: 8000, isRetired: false,
+  unemployedMonths: 0,
+  playerCash: 1000000,
+  playerDebt: 0, playerStocks: 0, playerHouses: 0,
+  totalDivsReceived: 0, totalRentReceived: 0, totalSalaryReceived: 0,
+  hsiOffset: 1.0, propOffset: 1.0, eventTicks: 0, eventName: "市場穩定",
+  historyLabels: [], hsiHistory: [], propHistory: [],
+  firstHouseAge: null, firstHouseDate: null, maxNetWorth: 0,
+  // AI 羊仔數據
+  ai: {
+    cash: 1000000, stocks: 0, houses: 0, debt: 0, salary: 20000,
+    isRetired: false, unemployedMonths: 0, lastHsi: 21000
+  }
+};
+
+// Chart
+const ctx = document.getElementById('marketChart')?.getContext('2d');
+let marketChart;
+if (ctx) {
+  marketChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: state.historyLabels,
+      datasets: [
+        { label: '恆指', data: state.hsiHistory, borderColor: '#f1c40f', borderWidth: 2, pointRadius: 0, yAxisID: 'y' },
+        { label: '呎價', data: state.propHistory, borderColor: '#3498db', borderWidth: 3, fill: true, backgroundColor: 'rgba(52, 152, 219, 0.2)', pointRadius: 0, yAxisID: 'y1' }
+      ]
+    },
+    options: { maintainAspectRatio: false, animation: false, scales: { y: { position: 'left' }, y1: { position: 'right' } } }
+  });
+}
+
+// Utils
+function getNetWorth(p = state) {
+  let assets = p.playerCash + (p.playerStocks * state.hsi) + (p.playerHouses * state.propertyPrice * 500);
+  return assets - p.playerDebt;
+}
+
+function getAINetWorth() {
+  let assets = state.ai.cash + (state.ai.stocks * state.hsi) + (state.ai.houses * state.propertyPrice * 500);
+  return assets - state.ai.debt;
+}
+
+function getCreditLimit() {
+  let stockVal = state.playerStocks * state.hsi;
+  let houseVal = state.playerHouses * state.propertyPrice * 500;
+  return (stockVal * 0.3) + (houseVal * 0.7) + (state.playerCash * 0.5);
+}
+
+function log(msg, type = 'normal') {
+  const l = document.getElementById('gameLog');
+  if (!l) return;
+  let color = { 'event': '#f1c40f', 'funny': '#ff79c6', 'trade': '#3498db', 'danger': '#ff4757' }[type] || '#00ff00';
+  l.innerHTML = `<div style="color:${color}; margin-bottom:5px;">[${state.year}-${state.month}] ${msg}</div>` + l.innerHTML.slice(0, 10000);
+}
+
+function setBtnText() {
+  const btn = document.getElementById('btn-pause');
+  if (!btn) return;
+  const isMobile = window.innerWidth < 768;
+  btn.innerText = state.isPaused ? (isMobile ? "▶️" : "▶️ 恢復") : (isMobile ? "⏸️" : "⏸️ 暫停");
+}
+
+function togglePause() {
+  state.isPaused = !state.isPaused;
+  setBtnText();
+  const pi = document.getElementById('pause-indicator');
+  if (pi) pi.style.display = state.isPaused ? "block" : "none";
+}
+
+function getRating() {
+  if (state.playerHouses >= 3 && state.totalRentReceived > 1000000) return '收租王 👑';
+  if (state.playerHouses >= 1 && state.totalRentReceived > 0) return '準收租王 🏆';
+  if (state.totalDivsReceived > 0 && state.totalDivsReceived > state.totalSalaryReceived * 0.5) return '股息王 💰';
+  if (state.totalSalaryReceived > 20000000) return '打工王 👷';
+  return '投資新手 🚀';
+}
+
+// Auto start on load
+document.getElementById('start-fab').style.display = 'none';
+document.getElementById('action-btns').style.display = 'flex';
+
+function render(loanRepay, interestExpense, rentIncome, divs, netMonthly, housingSaving, baseLiving, actualRentExpense) {
+  let nw = getNetWorth();
+  let limit = getCreditLimit();
+
+  ['ui-age', 'ui-date', 'ui-hsi', 'ui-market-mood', 'ui-interest', 'ui-status', 'ui-rank', 'ui-salary', 'ui-property-entry', 'p-debt-val', 'ui-credit-limit', 'p-cash-top', 'p-net-worth', 'p-stock-val', 'p-house-val', 'p-house-count', 'ui-total-salary', 'ui-total-divs', 'ui-total-rent'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    switch (id) {
+      case 'ui-age': el.innerText = state.age; break;
+      case 'ui-date': el.innerText = `${state.year}-${state.month}`; break;
+      case 'ui-hsi': el.innerText = Math.floor(state.hsi).toLocaleString(); break;
+      case 'ui-market-mood': el.innerText = state.eventName; break;
+      case 'ui-interest': el.innerText = state.interestRate.toFixed(2) + '%'; break;
+      case 'ui-status': el.innerText = state.isRetired ? '🏖️ 退休' : (state.unemployedMonths > 0 ? '⚠️ 失業' : '💼 工作'); break;
+      case 'ui-salary': 
+  let sal = Math.floor(state.salary || 0);
+  let pct = state.marketWage > 0 ? (state.salary / state.marketWage * 100).toFixed(1) : '0.0';
+  el.innerText = `$${sal.toLocaleString()} (${pct}%)`; 
+  break;
+      case 'ui-property-entry': el.innerText = `$${Math.floor(state.propertyPrice).toLocaleString()}`; break;
+      case 'p-debt-val': el.innerText = `$${Math.floor(state.playerDebt).toLocaleString()}`; break;
+      case 'ui-credit-limit': el.innerText = `$${(limit/1000000).toFixed(2)}M`; el.style.color = state.playerDebt > limit * 0.8 ? '#ff4757' : '#f1c40f'; break;
+      case 'p-cash-top': el.innerText = `$${(state.playerCash/1000000).toFixed(3)}M`; break;
+      case 'p-net-worth': el.innerText = `$${(nw/1000000).toFixed(2)}M`; break;
+      case 'p-stock-val': el.innerText = `$${((state.playerStocks * state.hsi)/1000000).toFixed(3)}M`; break;
+      case 'p-house-val': el.innerText = `$${((state.playerHouses * state.propertyPrice * 500)/1000000).toFixed(2)}M`; break;
+      case 'p-house-count': el.innerText = state.playerHouses; break;
+      case 'ui-total-salary': el.innerText = `$${(state.totalSalaryReceived/1000000).toFixed(2)}M`; break;
+      case 'ui-total-divs': el.innerText = `$${(state.totalDivsReceived/1000000).toFixed(2)}M`; break;
+      case 'ui-total-rent': el.innerText = `$${(state.totalRentReceived/1000000).toFixed(2)}M`; break;
+      case 'ui-rank':
+        const ranks = [{ n: '👑 誠哥', t: 1e8 }, { n: '🏢 業主', t: 1e7 }, { n: '🏃 打工', t: -1e9 }];
+        el.innerText = ranks.find(r => nw >= r.t)?.n || 'N/A';
+        break;
+      case 'ui-rating': el.innerText = getRating(); break;
+    }
+  });
+
+  let yearsToBuy = ((state.propertyPrice * 500) / state.marketWage / 12).toFixed(1);
+  let entryFee = (state.propertyPrice * 500 / 1000000).toFixed(1);
+  const pirEl = document.getElementById('ui-pir');
+  if (pirEl) pirEl.innerText = `入場費 $${entryFee}M | 上車難度 ${yearsToBuy}年`;
+
+  const table = document.getElementById('ui-statement-table');
+  if (table) {
+    table.innerHTML = `
+      <tr style="background:#2c3e50;"><td colspan="2">📢 經濟環境：<b>${state.eventName}</b></td></tr>
+      <tr><td>📅 月薪收入</td><td class="income">+$${Math.floor(state.isRetired?0:state.salary).toLocaleString()}</td></tr>
+      <tr><td>📈 股息 / 租金收益</td><td class="income">+$${Math.floor(divs).toLocaleString()} / +$${Math.floor(rentIncome).toLocaleString()}</td></tr>
+      <tr><td>🍕 生活支出</td><td class="danger">-$${Math.floor(baseLiving + actualRentExpense).toLocaleString()}</td></tr>
+      <tr><td>✅ 自住省下租金</td><td class="income">+$${Math.floor(housingSaving).toLocaleString()}</td></tr>
+      <tr><td>🏦 總融資還款</td><td class="danger">-$${Math.floor(loanRepay).toLocaleString()}</td></tr>
+      <tr style="font-size:0.8em; color:#aaa;"><td>(其中利息支出)</td><td>(-$${Math.floor(interestExpense).toLocaleString()})</td></tr>
+      <tr style="color:#f1c40f;"><td>⭐ 評級</td><td style="font-weight:bold;">${getRating()}</td></tr>
+      <tr style="font-weight:bold; border-top:2px solid #555;">
+        <td>💰 月結盈餘</td>
+        <td style="color:${netMonthly>=0?'#2ecc71':'#ff4757'}">$${Math.floor(netMonthly).toLocaleString()}</td>
+      </tr>
+    `;
+  }
+}
+
+function buyStockPct(pct) {
+  let qty = Math.floor((state.playerCash * pct) / state.hsi);
+  if (qty > 0) {
+    state.playerCash -= (qty * state.hsi);
+    state.playerStocks += qty;
+    log(`🛒 買入 ${qty.toLocaleString()} 股股票`, 'trade');
+  }
+}
+
+function sellStockPct(pct) {
+  let qtyToSell = Math.floor(state.playerStocks * pct);
+  if (qtyToSell > 0) {
+    state.playerCash += (qtyToSell * state.hsi);
+    state.playerStocks -= qtyToSell;
+    log(`💰 沽出 ${qtyToSell.toLocaleString()} 股股票`, 'trade');
+  }
+}
+
+function buyHouse() {
+  let cost = state.propertyPrice * 500;
+  if (state.playerCash >= cost) {
+    state.playerCash -= cost;
+    state.playerHouses++;
+    if (!state.firstHouseAge) {
+      state.firstHouseAge = state.age;
+      state.firstHouseDate = `${state.year}-${state.month}`;
+    }
+    log(`🏠 購入慧景軒單位！`, 'trade');
+  } else log("❌ 現金不足，無法買樓！", 'danger');
+}
+
+function sellHouse() {
+  if (state.playerHouses > 0) {
+    state.playerCash += (state.propertyPrice * 500);
+    state.playerHouses--;
+    log(`💰 賣出單位，套現資金。`, 'trade');
+  }
+}
+
+function borrowMoney() {
+  let limit = getCreditLimit();
+  let avail = Math.max(0, limit - state.playerDebt);
+  if (avail < 10000) {
+    log("❌ 信用額度不足，銀行拒絕借貸！", 'danger');
+    return;
+  }
+  let borrowAmt = Math.floor(avail * 0.5);
+  state.playerDebt += borrowAmt;
+  state.playerCash += borrowAmt;
+  log(`🏦 融資借入 $${(borrowAmt/1000).toFixed(0)}k`, 'trade');
+}
+
+function repayDebt() {
+  if (state.playerDebt <= 0) return;
+  let amt = Math.min(state.playerCash, state.playerDebt);
+  if (amt <= 0) {
+    log("❌ 現金不足，無法提前還款！", 'danger');
+    return;
+  }
+  state.playerDebt -= amt;
+  state.playerCash -= amt;
+  log(`💸 主動償還債務 $${(amt/1000).toFixed(1)}k`, 'trade');
+}
+
+function endGame(reason) {
+  state.running = false;
+  let nw = getNetWorth();
+  let aiNW = getAINetWorth();
+  let stockMV = (state.playerStocks * state.hsi / 1000000).toFixed(2);
+  let houseMV = (state.playerHouses * state.propertyPrice * 500 / 1000000).toFixed(2);
+  let rating = getRating();
+  let stats = `
+    👤 結算年齡：${state.age} 歲<br>
+    💰 最終淨資產：$${(nw/1000000).toFixed(2)}M<br>
+    📈 股票市值：$${stockMV}M<br>
+    🏠 物業市值：$${houseMV}M<br>
+    💵 累計收息：$${(state.totalDivsReceived/1000000).toFixed(2)}M<br>
+    🏠 累計收租：$${(state.totalRentReceived/1000000).toFixed(2)}M<br>
+    💼 累計薪金：$${(state.totalSalaryReceived/1000000).toFixed(2)}M<br>
+    🐑 AI 羊仔資產：$${(aiNW/1000000).toFixed(2)}M<br>
+    📊 最高身家：$${(state.maxNetWorth/1000000).toFixed(2)}M<br>
+    🏠 第一次上車：${state.firstHouseAge ? state.firstHouseAge + ' 歲 (' + state.firstHouseDate + ')' : '從未上車'}<br>
+    🏘️ 持有單位：${state.playerHouses} 間
+  `;
+  if (reason) stats = `<div style="color:#ff4757; font-weight:bold; margin-bottom:10px;">🚨 ${reason}</div>` + stats;
+  let rank = `${rating} | ${nw > aiNW ? "🏆 超越 AI！" : "🤖 AI 贏你"}`;
+  if (nw >= 100000000) rank += " 👑 香港財閥";
+  document.getElementById('finalStats').innerHTML = stats;
+  document.getElementById('rankingResult').innerHTML = rank;
+  document.getElementById('endScreen').style.display = 'flex';
+}
+
+function updateAI() {
+  let a = state.ai;
+  if (state.totalMonths % 12 === 0 && !a.isRetired) a.salary *= 1.03;
+  if (state.age >= 60) a.isRetired = true;
+  let marketRentVal = (state.propertyPrice * 500 * 0.003);
+  let rentIncome = Math.max(0, a.houses - 1) * marketRentVal;
+  let divs = (a.stocks * state.hsi) * 0.003;
+  let baseLiving = a.isRetired ? 8000 : a.salary * 0.4;
+  let actualRentExpense = (a.houses === 0) ? marketRentVal : 0;
+  let net = (a.isRetired ? 0 : (a.unemployedMonths > 0 ? 0 : a.salary)) + rentIncome + divs - baseLiving - actualRentExpense;
+  a.cash += net;
+  if (a.unemployedMonths > 0) a.unemployedMonths--;
+  let hsiChange = (state.hsi - a.lastHsi) / a.lastHsi;
+  if (hsiChange > 0.05 && a.cash > 50000) {
+    let buy = Math.floor((a.cash * 0.3) / state.hsi);
+    a.stocks += buy; a.cash -= buy * state.hsi;
+    log(`🤖 AI 羊仔追升買入 ${buy.toLocaleString()} 股股票`, 'trade');
+  } else if (hsiChange < -0.05 && a.stocks > 0) {
+    let sell = Math.floor(a.stocks * 0.5);
+    a.stocks -= sell; a.cash += sell * state.hsi;
+    log(`🤖 AI 羊仔恐慌拋售 ${sell.toLocaleString()} 股股票`, 'danger');
+  }
+  let houseCost = state.propertyPrice * 500;
+  if (a.cash > houseCost * 1.2) { a.cash -= houseCost; a.houses++; log(`🏠 AI 羊仔成功購入慧景軒單位！`, 'trade'); }
+  if (Math.random() < 0.03) {
+    let events = [{ n: "AI 羊仔喺伺服器挖礦被發現", type: 'unemployed', val: 3 }, { n: "AI 羊仔成功進化成超級智能", type: 'salary', val: 1.5 }, { n: "AI 羊仔執到你跌咗嘅錢", type: 'cash', val: 50000 }];
+    let e = events[Math.floor(Math.random()*events.length)];
+    if(e.type === 'unemployed') a.unemployedMonths = e.val;
+    if(e.type === 'salary') a.salary *= e.val;
+    if(e.type === 'cash') a.cash += e.val;
+    log(`🤖 AI 羊仔動向：${e.n}`, 'funny');
+  }
+  a.lastHsi = state.hsi;
+  document.getElementById('ai-net-worth').innerText = `$${(getAINetWorth()/1000000).toFixed(2)}M`;
+  document.getElementById('ai-cash').innerText = `$${(a.cash/1000000).toFixed(3)}M`;
+  document.getElementById('ai-salary-val').innerText = Math.floor(a.isRetired ? 0 : a.salary).toLocaleString();
+  document.getElementById('ai-surplus').innerText = `$${Math.floor(net).toLocaleString()}`;
+  document.getElementById('ai-surplus').style.color = net >= 0 ? '#2ecc71' : '#ff4757';
+  document.getElementById('ai-stock-val').innerText = `$${((a.stocks * state.hsi)/1000000).toFixed(2)}M`;
+  document.getElementById('ai-house-count').innerText = a.houses;
+  document.getElementById('ai-status').innerText = a.isRetired ? "🏖️ 退休" : (a.unemployedMonths > 0 ? "⚠️ 失業" : "💼 工作");
+}
+
+function update() {
+  if (!state.running || state.isPaused) return;
+  if (state.age >= 100) { endGame(); return; }
+  if (state.age >= 60 && !state.isRetired) {
+    state.isRetired = true;
+    state.salary = 0;
+    state.baseSalary = 0;
+    log("🎉 恭喜！你已經 60 歲，正式開始退休生活！", 'event');
+  }
+  state.totalMonths++;
+  if (state.eventTicks > 0) state.eventTicks--;
+  else if (Math.random() < 0.12) {
+    state.eventTicks = 6 + Math.floor(Math.random()*18);
+    let events = [
+      { name: "市場穩定", hsi: 1.0, prop: 1.0, int: 4.0, msg: "市場穩定", type: 'normal' },
+      { name: "🔥 市場瘋狂", hsi: 1.4, prop: 1.3, int: 2.5, msg: "🚀 股市樓市齊飛！", type: 'event' },
+      { name: "🌪️ 金融風暴", hsi: 0.5, prop: 0.7, int: 7.5, msg: "🚨 資產價值大幅插水！", type: 'danger' },
+      { name: "🚀 科技泡沫", hsi: 1.8, prop: 1.0, int: 5.0, msg: "💻 AI 概念股熱炒，股市狂飆！", type: 'event' },
+      { name: "📉 政策打壓", hsi: 0.9, prop: 0.5, int: 4.0, msg: "🏢 政府出狠招打壓樓市！", type: 'danger' },
+      { name: "💸 惡性通脹", hsi: 1.1, prop: 1.2, int: 12.0, msg: "🍞 物價狂升，加息壓力爆表！", type: 'danger' },
+      { name: "🏦 降息救市", hsi: 1.2, prop: 1.3, int: 1.5, msg: "💰 央行大放水，借貸成本極低！", type: 'event' },
+      { name: "📉 經濟衰退", hsi: 0.7, prop: 0.8, int: 3.0, msg: "📉 全球經濟低迷，步入寒冬。", type: 'danger' },
+      { name: "☢️ 黑天鵝", hsi: 0.4, prop: 0.6, int: 9.0, msg: "💀 突發極端事件，全線崩盤！", type: 'danger' }
+    ];
+    let e = events[Math.floor(Math.random() * events.length)];
+    state.hsiOffset = e.hsi;
+    state.propOffset = e.prop;
+    state.targetInterest = e.int;
+    state.eventName = e.name;
+    log(e.msg, e.type);
+  } else if (Math.random() < 0.05) {
+    let personalEvents = [
+      { n: "幫老細個仔補習，老細好滿意", type: 'salary', val: 1.1, msg: "💼 薪金 +10！", color: 'funny', workOnly: true },
+      { n: "返工寫 Code 用 AI 被老細發現，以為你係天才", type: 'salary', val: 1.15, msg: "💼 薪金 +15！", color: 'funny', workOnly: true },
+      { n: "返工跳摺凳舞被 HR 視為精神不穩定", type: 'unemployed', val: 4, msg: "🚫 失業 4 個月！", color: 'danger', workOnly: true },
+      { n: "因為喺 Office 偷食榴槤被放無薪假", type: 'unemployed', val: 3, msg: "🚫 失業 3 個月！", color: 'danger', workOnly: true },
+      { n: "喺天水圍執到誠哥跌咗嘅 5 蚊並還返畀佢，獲贈謝禮", type: 'nw', val: 0.02, msg: "💰 總資產 +2！", color: 'funny', workOnly: false },
+      { n: "俾大媽呃咗去投資「比特幣補習班」", type: 'nw', val: -0.05, msg: "💸 總資產 -5！", color: 'danger', workOnly: false },
+      { n: "沉迷抽盲盒，屋企堆滿垃圾", type: 'nw', val: -0.03, msg: "💸 總資產 -3！", color: 'danger', workOnly: false },
+      { n: "買股票唔小心撳錯掣 All-in 咗垃圾股", type: 'nw', val: -0.08, msg: "📉 總資產 -8！", color: 'danger', workOnly: false }
+    ];
+    if (state.isRetired) personalEvents = personalEvents.filter(e => !e.workOnly);
+    if (personalEvents.length > 0) {
+      let pe = personalEvents[Math.floor(Math.random() * personalEvents.length)];
+      log(`⚡ 人生無常：${pe.n} (${pe.msg})`, pe.color);
+      if (pe.type === 'salary') { state.baseSalary *= pe.val; state.salary = state.baseSalary; }
+      else if (pe.type === 'unemployed') { state.unemployedMonths = pe.val; state.salary = 0; }
+      else if (pe.type === 'nw') { state.playerCash += getNetWorth() * pe.val; }
+    }
+  } else if (state.totalMonths % 48 === 0) {
+    state.hsiOffset = 1.0; state.propOffset = 1.0; state.targetInterest = 4.0; state.eventName = "市場穩定";
+  }
+
+  updateAI();
+
+  state.hsi = (21000 + Math.sin(state.totalMonths/25)*7000) * state.hsiOffset + (Math.random()*400 - 200);
+  let target = state.targetInterest || 4.0;
+  state.interestRate += (target - state.interestRate) * 0.15;
+
+  let targetProp = ((state.marketWage * 0.4) + (state.hsi * 0.07)) * state.propOffset;
+  state.bufferedPropPrice += (targetProp - state.bufferedPropPrice) * 0.12;
+  state.propertyPrice = state.bufferedPropPrice + (Math.random()*150 - 75);
+
+  // 收支計算（優化債務）
+  let marketRentVal = (state.propertyPrice * 500 * 0.003);
+  // 退休後生活支出為 60 歲前（baseLiving）的一半
+  let baseLiving = state.isRetired ? (state.preRetireLiving / 2) : (state.salary > 0 ? state.salary * 0.4 : state.marketWage * 0.4);
+  if (!state.isRetired) state.preRetireLiving = baseLiving; // 記錄退休前的生活水平
+
+  let actualRentExpense = (state.playerHouses === 0) ? marketRentVal : 0;
+  let rentIncome = Math.max(0, state.playerHouses - 1) * marketRentVal;
+  state.totalRentReceived += rentIncome;
+  let divs = (state.playerStocks * state.hsi) * 0.003;
+  state.totalDivsReceived += divs;
+  if (!state.isRetired && state.salary > 0) {
+    state.totalSalaryReceived += state.salary;
+  }
+  // 債務優化邏輯：息隨本減
+  let interestExpense = state.playerDebt * (state.interestRate / 100 / 12);
+  let principalRepay = state.playerDebt > 0 ? Math.min(state.playerDebt, 2000 + state.playerDebt * 0.005) : 0;
+  let loanRepay = interestExpense + principalRepay;
+  if(state.playerDebt > 0) state.playerDebt = Math.max(0, state.playerDebt - principalRepay);
+
+  let netMonthly = (state.isRetired ? 0 : state.salary) + rentIncome + divs - baseLiving - actualRentExpense - loanRepay;
+  state.playerCash += netMonthly;
+
+  // Margin Call 檢查：負債超過信用額度
+  let limit = getCreditLimit();
+  if (state.playerDebt > limit && state.playerStocks > 0) {
+    let over = state.playerDebt - limit;
+    let sellQty = Math.ceil(over / state.hsi);
+    sellQty = Math.min(sellQty, state.playerStocks);
+    state.playerStocks -= sellQty;
+    let gain = sellQty * state.hsi;
+    state.playerCash += gain;
+    // 強制還款以降低負債
+    state.playerDebt -= gain;
+    log(`🚨 Margin Call！負債超出信用額度，強制平倉 ${sellQty} 股還債！`, 'danger');
+  }
+
+  if (state.playerCash < 0 && state.playerStocks > 0) {
+    let needed = Math.abs(state.playerCash);
+    let qtyToSell = Math.min(Math.ceil(needed / state.hsi), state.playerStocks);
+    state.playerStocks -= qtyToSell;
+    state.playerCash += (qtyToSell * state.hsi);
+    log(`⚠️ 現金不足，強制平倉 ${qtyToSell} 股填補缺口！`, 'danger');
+  }
+
+  state.month++;
+  if(state.month > 12){
+    state.month = 1; state.year++; state.age++;
+    if(!state.isRetired) { state.baseSalary *= 1.03; if (state.unemployedMonths <= 0) state.salary = state.baseSalary; }
+    state.marketWage *= 1.02;
+  }
+
+  if (state.unemployedMonths > 0) {
+    state.unemployedMonths--; state.salary = 0;
+    if (state.unemployedMonths === 0) { state.salary = state.baseSalary; log("🎉 重新就業！", 'event'); }
+  }
+
+  state.historyLabels.push(`${state.year}-${state.month}`);
+  state.hsiHistory.push(state.hsi);
+  state.propHistory.push(state.propertyPrice);
+  if(state.historyLabels.length > 80) { state.historyLabels.shift(); state.hsiHistory.shift(); state.propHistory.shift(); }
+  marketChart.update('none');
+
+  let curNW = getNetWorth();
+  if(curNW > state.maxNetWorth) state.maxNetWorth = curNW;
+
+  render(loanRepay, interestExpense, rentIncome, divs, netMonthly, (state.playerHouses >= 1 ? marketRentVal : 0), baseLiving, actualRentExpense);
+
+  if (curNW < 0) {
+    log("📉 破產！你已陷入負資產。", 'danger');
+    endGame("破產結算：資產已清零。");
+  }
+}
+
+setInterval(update, 1000);
+setBtnText();
+window.addEventListener('resize', setBtnText);
+</script>
+</body>
+</html>
