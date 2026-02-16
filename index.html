@@ -90,12 +90,12 @@
             </div>
             <div class="dashboard">
                 <div class="card">年齡 / 日期<br><span class="value" id="ui-age">--</span><span id="ui-date" class="sub-value">--</span></div>
-                <div class="card">恆生指數 (HSI)<br><span class="value" id="ui-hsi" style="color:#f1c40f">--</span><span class="sub-value"><span id="ui-market-mood">--</span> | 利率: <span id="ui-interest">--</span></span></div>
+                <div class="card">恆生指數 (HSI)<br><span class="value" style="color:#f1c40f"><span id="ui-hsi">--</span> <span style="font-size:0.75em; color:#aaa;">(P/E <span id="ui-hsi-pe">--</span>)</span></span><span class="sub-value"><span id="ui-market-mood">--</span> | 利率: <span id="ui-interest">--</span></span></div>
                 <div class="card">社會地位<br><span class="value" id="ui-status">--</span><span class="sub-value"><span id="ui-rank">--</span> | 月薪: <span id="ui-salary">--</span></span></div>
                 <div class="card">樓市呎價<br><span class="value" id="ui-property-entry" style="color:#3498db">--</span><span class="sub-value" id="ui-pir">--</span></span></div>
                 <div class="card">總負債<br><span class="value danger" id="p-debt-val">--</span><span class="sub-value">信用額度: <span id="ui-credit-limit">--</span></span></div>
                 <div class="card">可用現金<br><span class="value" id="p-cash-top" style="color:#fff">--</span></div>
-            </div> 
+            </div>
             <div class="player-card">
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:20px;">
                     <div>股票市值: <span id="p-stock-val" style="color:#f1c40f">$0</span></div>
@@ -165,6 +165,7 @@ let state = {
   playerDebt: 0, playerStocks: 0, playerHouses: 0,
   totalDivsReceived: 0, totalRentReceived: 0, totalSalaryReceived: 0,
   hsiOffset: 1.0, propOffset: 1.0, eventTicks: 0, eventName: "市場穩定",
+  earnings: 1400, // HSI / PE init (21000 / 15)
   historyLabels: [], hsiHistory: [], propHistory: [],
   firstHouseAge: null, firstHouseDate: null, maxNetWorth: 0,
   // AI 羊仔數據
@@ -245,20 +246,24 @@ function render(loanRepay, interestExpense, rentIncome, divs, netMonthly, housin
   let nw = getNetWorth();
   let limit = getCreditLimit();
 
-  ['ui-age', 'ui-date', 'ui-hsi', 'ui-market-mood', 'ui-interest', 'ui-status', 'ui-rank', 'ui-salary', 'ui-property-entry', 'p-debt-val', 'ui-credit-limit', 'p-cash-top', 'p-net-worth', 'p-stock-val', 'p-house-val', 'p-house-count', 'ui-total-salary', 'ui-total-divs', 'ui-total-rent'].forEach(id => {
+  ['ui-age', 'ui-date', 'ui-hsi', 'ui-hsi-pe', 'ui-market-mood', 'ui-interest', 'ui-status', 'ui-rank', 'ui-salary', 'ui-property-entry', 'p-debt-val', 'ui-credit-limit', 'p-cash-top', 'p-net-worth', 'p-stock-val', 'p-house-val', 'p-house-count', 'ui-total-salary', 'ui-total-divs', 'ui-total-rent'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     switch (id) {
       case 'ui-age': el.innerText = state.age; break;
       case 'ui-date': el.innerText = `${state.year}-${state.month}`; break;
       case 'ui-hsi': el.innerText = Math.floor(state.hsi).toLocaleString(); break;
+      case 'ui-hsi-pe': 
+        let pe = state.hsi / state.earnings;
+        el.innerText = pe.toFixed(1); 
+        break;
       case 'ui-market-mood': el.innerText = state.eventName; break;
       case 'ui-interest': el.innerText = state.interestRate.toFixed(2) + '%'; break;
       case 'ui-status': el.innerText = state.isRetired ? '🏖️ 退休' : (state.unemployedMonths > 0 ? '⚠️ 失業' : '💼 工作'); break;
-      case 'ui-salary': 
+      case 'ui-salary':
   let sal = Math.floor(state.salary || 0);
   let pct = state.marketWage > 0 ? (state.salary / state.marketWage * 100).toFixed(1) : '0.0';
-  el.innerText = `$${sal.toLocaleString()} (${pct}%)`; 
+  el.innerText = `$${sal.toLocaleString()} (${pct}%)`;
   break;
       case 'ui-property-entry': el.innerText = `$${Math.floor(state.propertyPrice).toLocaleString()}`; break;
       case 'p-debt-val': el.innerText = `$${Math.floor(state.playerDebt).toLocaleString()}`; break;
@@ -293,7 +298,7 @@ function render(loanRepay, interestExpense, rentIncome, divs, netMonthly, housin
       <tr><td>🍕 生活支出</td><td class="danger">-$${Math.floor(baseLiving + actualRentExpense).toLocaleString()}</td></tr>
       <tr><td>✅ 自住省下租金</td><td class="income">+$${Math.floor(housingSaving).toLocaleString()}</td></tr>
       <tr><td>🏦 總融資還款</td><td class="danger">-$${Math.floor(loanRepay).toLocaleString()}</td></tr>
-      <tr style="font-size:0.8em; color:#aaa;"><td>(其中利息支出)</td><td>(-$${Math.floor(interestExpense).toLocaleString()})</td></tr>
+      <tr style="font-size:0.8em; color:#aaa;"><td>(其中利息支出 @${state.interestRate.toFixed(2)}%)</td><td>(-$${Math.floor(interestExpense).toLocaleString()})</td></tr>
       <tr style="color:#f1c40f;"><td>⭐ 評級</td><td style="font-weight:bold;">${getRating()}</td></tr>
       <tr style="font-weight:bold; border-top:2px solid #555;">
         <td>💰 月結盈餘</td>
@@ -303,68 +308,119 @@ function render(loanRepay, interestExpense, rentIncome, divs, netMonthly, housin
   }
 }
 
+function refreshUI() {
+  try {
+    let nw = getNetWorth();
+    let limit = getCreditLimit();
+    let marketRentVal = (state.propertyPrice * 500 * 0.003);
+    let baseLiving = state.isRetired ? (state.preRetireLiving / 2) : (state.salary > 0 ? state.salary * 0.4 : state.marketWage * 0.4);
+    let actualRentExpense = (state.playerHouses === 0) ? marketRentVal : 0;
+    let rentIncomePlayer = Math.max(0, state.playerHouses - 1) * marketRentVal;
+    let divs = (state.playerStocks * state.hsi) * 0.003;
+
+    let interestExpense = state.playerDebt * (state.interestRate / 100 / 12);
+    let principalRepay = state.playerDebt > 0 ? Math.min(state.playerDebt, 2000 + state.playerDebt * 0.005) : 0;
+    let loanRepay = interestExpense + principalRepay;
+    let netMonthly = (state.isRetired ? 0 : state.salary) + rentIncomePlayer + divs - baseLiving - actualRentExpense - loanRepay;
+
+    render(loanRepay, interestExpense, rentIncomePlayer, divs, netMonthly, (state.playerHouses >= 1 ? marketRentVal : 0), baseLiving, actualRentExpense);
+  } catch (e) {
+    safeLog('refreshUI error:', e);
+  }
+}
+
 function buyStockPct(pct) {
-  let qty = Math.floor((state.playerCash * pct) / state.hsi);
-  if (qty > 0) {
-    state.playerCash -= (qty * state.hsi);
-    state.playerStocks += qty;
-    log(`🛒 買入 ${qty.toLocaleString()} 股股票`, 'trade');
+  try {
+    let qty = Math.floor((state.playerCash * pct) / state.hsi);
+    if (qty > 0) {
+      state.playerCash -= (qty * state.hsi);
+      state.playerStocks += qty;
+      log(`🛒 買入 ${qty.toLocaleString()} 股股票`, 'trade');
+    }
+    refreshUI();
+  } catch (e) {
+    safeLog('buyStockPct error:', e);
   }
 }
 
 function sellStockPct(pct) {
-  let qtyToSell = Math.floor(state.playerStocks * pct);
-  if (qtyToSell > 0) {
-    state.playerCash += (qtyToSell * state.hsi);
-    state.playerStocks -= qtyToSell;
-    log(`💰 沽出 ${qtyToSell.toLocaleString()} 股股票`, 'trade');
+  try {
+    let qtyToSell = Math.floor(state.playerStocks * pct);
+    if (qtyToSell > 0) {
+      state.playerCash += (qtyToSell * state.hsi);
+      state.playerStocks -= qtyToSell;
+      log(`💰 沽出 ${qtyToSell.toLocaleString()} 股股票`, 'trade');
+    }
+    refreshUI();
+  } catch (e) {
+    safeLog('sellStockPct error:', e);
   }
 }
 
 function buyHouse() {
-  let cost = state.propertyPrice * 500;
-  if (state.playerCash >= cost) {
-    state.playerCash -= cost;
-    state.playerHouses++;
-    if (!state.firstHouseAge) {
-      state.firstHouseAge = state.age;
-      state.firstHouseDate = `${state.year}-${state.month}`;
-    }
-    log(`🏠 購入慧景軒單位！`, 'trade');
-  } else log("❌ 現金不足，無法買樓！", 'danger');
+  try {
+    let cost = state.propertyPrice * 500;
+    if (state.playerCash >= cost) {
+      state.playerCash -= cost;
+      state.playerHouses++;
+      if (!state.firstHouseAge) {
+        state.firstHouseAge = state.age;
+        state.firstHouseDate = `${state.year}-${state.month}`;
+      }
+      log(`🏠 買入一間單位！`, 'trade');
+    } else log("❌ 現金不足，無法買樓！", 'danger');
+    refreshUI();
+  } catch (e) {
+    safeLog('buyHouse error:', e);
+  }
 }
 
 function sellHouse() {
-  if (state.playerHouses > 0) {
-    state.playerCash += (state.propertyPrice * 500);
-    state.playerHouses--;
-    log(`💰 賣出單位，套現資金。`, 'trade');
+  try {
+    if (state.playerHouses > 0) {
+      state.playerCash += (state.propertyPrice * 500);
+      state.playerHouses--;
+      log(`💰 賣出單位，套現資金。`, 'trade');
+    }
+    refreshUI();
+  } catch (e) {
+    safeLog('sellHouse error:', e);
   }
 }
 
 function borrowMoney() {
-  let limit = getCreditLimit();
-  let avail = Math.max(0, limit - state.playerDebt);
-  if (avail < 10000) {
-    log("❌ 信用額度不足，銀行拒絕借貸！", 'danger');
-    return;
+  try {
+    let limit = getCreditLimit();
+    let avail = Math.max(0, limit - state.playerDebt);
+    if (avail < 10000) {
+      log("❌ 信用額度不足，銀行拒絕借貸！", 'danger');
+      return;
+    }
+    let borrowAmt = Math.floor(avail * 0.5);
+    state.playerDebt += borrowAmt;
+    state.playerCash += borrowAmt;
+    log(`🏦 融資借入 $${(borrowAmt/1000).toFixed(0)}k`, 'trade');
+    refreshUI();
+  } catch (e) {
+    safeLog('borrowMoney error:', e);
   }
-  let borrowAmt = Math.floor(avail * 0.5);
-  state.playerDebt += borrowAmt;
-  state.playerCash += borrowAmt;
-  log(`🏦 融資借入 $${(borrowAmt/1000).toFixed(0)}k`, 'trade');
 }
 
 function repayDebt() {
-  if (state.playerDebt <= 0) return;
-  let amt = Math.min(state.playerCash, state.playerDebt);
-  if (amt <= 0) {
-    log("❌ 現金不足，無法提前還款！", 'danger');
-    return;
+  try {
+    if (state.playerDebt <= 0) return;
+    let amt = Math.min(state.playerCash, state.playerDebt);
+    if (amt <= 0) {
+      log("❌ 現金不足，無法提前還款！", 'danger');
+      return;
+    }
+    state.playerDebt -= amt;
+    state.playerCash -= amt;
+    log(`💸 主動償還債務 $${(amt/1000).toFixed(1)}k`, 'trade');
+    refreshUI();
+  } catch (e) {
+    safeLog('repayDebt error:', e);
   }
-  state.playerDebt -= amt;
-  state.playerCash -= amt;
-  log(`💸 主動償還債務 $${(amt/1000).toFixed(1)}k`, 'trade');
 }
 
 function endGame(reason) {
@@ -419,6 +475,14 @@ function updateAI() {
   }
   let houseCost = state.propertyPrice * 500;
   if (a.cash > houseCost * 1.2) { a.cash -= houseCost; a.houses++; log(`🏠 AI 羊仔成功購入慧景軒單位！`, 'trade'); }
+  
+  // AI 物業維修事件
+  if (a.houses > 0 && Math.random() < (0.02 * a.houses)) {
+    let repairCost = state.marketWage * 0.5 * a.houses;
+    a.cash -= repairCost;
+    log(`🤖 AI 羊仔動向：物業需要大型維修，支付維修費 -$${Math.floor(repairCost).toLocaleString()}`, 'danger');
+  }
+
   if (Math.random() < 0.03) {
     let events = [{ n: "AI 羊仔喺伺服器挖礦被發現", type: 'unemployed', val: 3 }, { n: "AI 羊仔成功進化成超級智能", type: 'salary', val: 1.5 }, { n: "AI 羊仔執到你跌咗嘅錢", type: 'cash', val: 50000 }];
     let e = events[Math.floor(Math.random()*events.length)];
@@ -480,12 +544,26 @@ function update() {
       { n: "買股票唔小心撳錯掣 All-in 咗垃圾股", type: 'nw', val: -0.08, msg: "📉 總資產 -8！", color: 'danger', workOnly: false }
     ];
     if (state.isRetired) personalEvents = personalEvents.filter(e => !e.workOnly);
+    
+    // 物業維修事件：物業越多機率越高
+    if (state.playerHouses > 0 && Math.random() < (0.05 * state.playerHouses)) {
+        personalEvents.push({ 
+            n: `屋漏兼逢連夜雨：物業需要大型維修 (${state.playerHouses}間單位)`, 
+            type: 'repair', 
+            val: -1.0 * state.playerHouses, // 每間扣 1.0個月人均薪資
+            msg: `💸 維修費 -$${Math.floor(state.marketWage * 1.0 * state.playerHouses).toLocaleString()}`, 
+            color: 'danger', 
+            workOnly: false 
+        });
+    }
+
     if (personalEvents.length > 0) {
       let pe = personalEvents[Math.floor(Math.random() * personalEvents.length)];
       log(`⚡ 人生無常：${pe.n} (${pe.msg})`, pe.color);
       if (pe.type === 'salary') { state.baseSalary *= pe.val; state.salary = state.baseSalary; }
       else if (pe.type === 'unemployed') { state.unemployedMonths = pe.val; state.salary = 0; }
       else if (pe.type === 'nw') { state.playerCash += getNetWorth() * pe.val; }
+      else if (pe.type === 'repair') { state.playerCash += (state.marketWage * pe.val); }
     }
   } else if (state.totalMonths % 48 === 0) {
     state.hsiOffset = 1.0; state.propOffset = 1.0; state.targetInterest = 4.0; state.eventName = "市場穩定";
@@ -548,7 +626,8 @@ function update() {
 
   state.month++;
   if(state.month > 12){
-    state.month = 1; state.year++; state.age++;
+    state.month = 1; state.year++; state.age++; 
+    state.earnings *= 1.015; // PE slow up
     if(!state.isRetired) { state.baseSalary *= 1.03; if (state.unemployedMonths <= 0) state.salary = state.baseSalary; }
     state.marketWage *= 1.02;
   }
